@@ -1,13 +1,89 @@
 
 import argparse
 import fileinput
+import heapq
 import logging
 import sys
+
+def p():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--picks')
+    args = parser.parse_args()
+
+    def f():
+        with open(args.picks) as input:
+            return picks_matrix(input)
+    picks = f()
+    print picks
+
+def picks_matrix(input):
+    picks = None
+    for line in input:
+        if not picks:
+            picks = [(float(x), {}) for x in line.split()]
+        else:
+            tokens = line.split()
+            team = tokens[0]
+            i = 0
+            for i, token in enumerate(tokens[1:]):
+                picks[i][1][team] = int(token)
+    return picks
+
+def compute_expected_values(picks, all_teams, n, top_k):
+    people = n + sum(v for _, v in picks.iteritems())
+    my_pickes = [0] * n
+    heap = []
+    while my_picks[-1] < len(teams):
+
+        for x in my_picks:
+            counts[teams[x]] += 1
+
+        values = {}
+        s = 0.0
+        everyone_loses = 0.0
+        for p, teams in outcomes:
+            s += p
+            if teams:
+                number_of_people_remaining = sum(counts[t] for t in teams)
+                ev = p / number_of_people_remaining
+                for t in teams:
+                    if t not in values:
+                        values[t] = 0.0
+                
+            else:
+                number_of_people_remaining = people
+            expected_value = p / number_of_people_remaining
+
+
+
+        v = sum(values[teams[x]] for x in my_picks)
+        for t in teams:
+            values[t] = values.get(t, 0.0) + expected_value
+        
+        t = v, tuple(my_picks)
+        if len(heap) < top_k:
+            heapq.heappush(heap, t)
+        else:
+            heapq.heappushpop(heap, t)
+
+        for x in my_picks:
+            counts[teams[x]] -= 1
+
+        i = 0
+        while True:
+            my_picks[i] += 1
+            if my_picks[i] < len(teams):
+                break
+            else:
+                my_picks[i] = 0
+                i += 1
 
 def main():
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
+    parser.add_argument('-n', help='number of bets we have to place', type='int')
     parser.add_argument('--wins', help='name of file that includes win percentages')
+    parser.add_argument('--picks', help='name of file that includes picks')
     parser.add_argument('--debug', help='whether to show the work that goes into this calculation', action='store_true')
     args = parser.parse_args()
 
@@ -47,11 +123,12 @@ def main():
 
     counts = {} # the number of people who have chosen each team
     outcomes = [(1.0, [])] # there's one outcome: with probability 1, nobody remains
-    total_chosen = 0.0
-    for line in sys.stdin:
-        team, chosen = line.split()
-        total_chosen += float(chosen)
-        counts[team] = float(chosen)
+    total_chosen = 0
+    with open(args.picks) as picks:
+        for line in picks:
+            team, chosen = line.split()
+        total_chosen += int(chosen)
+        counts[team] = int(chosen)
 
         new_outcomes = []
         w = wp(team)
@@ -91,4 +168,5 @@ def main():
 
 # this is the main entry point for python scripts
 if __name__ == "__main__":
-    main()
+    p()
+
