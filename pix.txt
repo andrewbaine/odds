@@ -1,0 +1,7 @@
+      1.0
+HOU    8 
+IND    8 
+ATL    5 
+WAS    2 
+CHI    2 
+PIT    2 

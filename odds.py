@@ -3,170 +3,109 @@ import argparse
 import fileinput
 import heapq
 import logging
+import random
 import sys
 
-def p():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--picks')
-    args = parser.parse_args()
+def outcomes(odds):
+    result = [(1.0, [])] # there's one outcome: with probability 1, nobody remains
+    for team, win_percentage in odds.iteritems():
+        new_outcomes = []
+        w = win_percentage
+        for probability, teams in result:
+            new_teams = teams[:]
+            new_teams.append(team)
+            new_outcomes.append((probability * w, new_teams))
+            new_outcomes.append((probability * (1 - w), teams))
+        result = new_outcomes
+    return result
 
-    def f():
-        with open(args.picks) as input:
-            return picks_matrix(input)
-    picks = f()
-    print picks
+def expected_value(teams, my_pick, picks, odds, outcomes):
+    number_of_people_remaining = len(my_pick) + sum(v for k,v in picks[0][1].iteritems())
+    result = 0.0
+    for probability, winners in outcomes:
+        for s, counts in picks:
+            for x in my_pick:
+                counts[teams[x]] = counts.get(teams[x], 0) + 1
 
-def picks_matrix(input):
-    picks = None
-    for line in input:
-        if not picks:
-            picks = [(float(x), {}) for x in line.split()]
-        else:
-            tokens = line.split()
-            team = tokens[0]
-            i = 0
-            for i, token in enumerate(tokens[1:]):
-                picks[i][1][team] = int(token)
-    return picks
+            my_winning_picks = sum(1 for x in my_pick if teams[x] in winners)
+            number_moving_on = sum(counts.get(t, 0) for t in winners)
+            ev = s * probability * 1.0 / number_of_people_remaining
+            if number_moving_on != 0:
+                ev = s * probability * float(my_winning_picks) / float(number_moving_on)
+            result += ev
 
-def compute_expected_values(picks, all_teams, n, top_k):
-    people = n + sum(v for _, v in picks.iteritems())
-    my_pickes = [0] * n
-    heap = []
-    while my_picks[-1] < len(teams):
-
-        for x in my_picks:
-            counts[teams[x]] += 1
-
-        values = {}
-        s = 0.0
-        everyone_loses = 0.0
-        for p, teams in outcomes:
-            s += p
-            if teams:
-                number_of_people_remaining = sum(counts[t] for t in teams)
-                ev = p / number_of_people_remaining
-                for t in teams:
-                    if t not in values:
-                        values[t] = 0.0
-                
-            else:
-                number_of_people_remaining = people
-            expected_value = p / number_of_people_remaining
-
-
-
-        v = sum(values[teams[x]] for x in my_picks)
-        for t in teams:
-            values[t] = values.get(t, 0.0) + expected_value
-        
-        t = v, tuple(my_picks)
-        if len(heap) < top_k:
-            heapq.heappush(heap, t)
-        else:
-            heapq.heappushpop(heap, t)
-
-        for x in my_picks:
-            counts[teams[x]] -= 1
-
-        i = 0
-        while True:
-            my_picks[i] += 1
-            if my_picks[i] < len(teams):
-                break
-            else:
-                my_picks[i] = 0
-                i += 1
+            for x in my_pick:
+                counts[teams[x]] -= 1
+    return result
 
 def main():
-    logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
-    parser.add_argument('-n', help='number of bets we have to place', type='int')
-    parser.add_argument('--wins', help='name of file that includes win percentages')
-    parser.add_argument('--picks', help='name of file that includes picks')
-    parser.add_argument('--debug', help='whether to show the work that goes into this calculation', action='store_true')
+    parser.add_argument('--picks')
+    parser.add_argument('--n', type=int)
+    parser.add_argument('--k', type=int, default=10)
+    parser.add_argument('--wins')
+    parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
-    # loop through a file that looks like:
-    #  DEN 0.8
-    #  IND 0.6
-    #  DAL 0.7
-    # where each line has a team and then a likelihood of winning
-    # this file can be as long as we want.  These
-    # entries are stored in the win_percentages dict
+    level = logging.DEBUG if args.debug else logging.INFO
+    logging.basicConfig(level=level)
+    picks = picks_matrix(args.picks)
+    print picks
+
     win_percentages = {}
     with open(args.wins) as input:
         for line in input:
             team, odds = line.split()
             win_percentages[team] = float(odds)
+    
+    teams = [x for x in win_percentages]
+    print teams
 
+    my_pick = [0] * args.n
+    last_pick = [len(teams) - 1] * args.n
 
-    def wp(team):
-        if team not in win_percentages:
-            logging.warn('team not found in win percentages file, assuming 0.5: %s', team)
-        return win_percentages.get(team, 0.5)
+    heap = []
 
-    # loop through standard input and see how many people have chosen
-    # each team
-    # this can be a percentage or an absolute number of people
-    # for example, you could enter
-    #
-    #   DEN 10
-    #   SF 30
-    #   SEA 10
-    #
-    # or
-    #
-    #   DEN 0.2
-    #   SF 0.6
-    #   SEA 0.2
+    outs = outcomes(win_percentages)
+    while True:
+        ev = expected_value(teams, my_pick, picks, win_percentages, outs)
+        heapq.heappush(heap, (ev, tuple(teams[x] for x in my_pick)))
+        if len(heap) > args.k:
+            heapq.heappop(heap)
 
-    counts = {} # the number of people who have chosen each team
-    outcomes = [(1.0, [])] # there's one outcome: with probability 1, nobody remains
-    total_chosen = 0
-    with open(args.picks) as picks:
-        for line in picks:
-            team, chosen = line.split()
-        total_chosen += int(chosen)
-        counts[team] = int(chosen)
-
-        new_outcomes = []
-        w = wp(team)
-        for probability, teams in outcomes:
-            new_teams = teams[:]
-            new_teams.append(team)
-            new_outcomes.append((probability * w, new_teams))
-            new_outcomes.append((probability * (1 - w), teams))
-        outcomes = new_outcomes
-
-    if args.debug:
-        print('PROBABILITY\tOUTCOME')
-        for p, teams in outcomes:
-            print('%10f\t%s' % (p, teams))
-        print('')
-
-    values = {}
-    s = 0.0
-    everyone_loses = 0.0
-    for p, teams in outcomes:
-        s += p
-        if teams:
-            number_of_people_remaining = 0.0 + sum(counts[t] for t in teams)
+        if my_pick == last_pick:
+            break
         else:
-            everyone_loses = p / total_chosen
-        expected_value = p / number_of_people_remaining
-        for t in teams:
-            values[t] = values.get(t, 0.0) + expected_value
+            i = 0
+            while True:
+                my_pick[i] += 1
+                if my_pick[i] == len(teams):
+                    my_pick[i] = 0
+                    i += 1
+                else:
+                    break
+    results =[]
+    while heap:
+        results.append(heapq.heappop(heap))
+    results.reverse()
+    for x in results:
+        print x
 
-    print('\n%8s%8s%8s%8s' % ('Team', 'EV', 'Win %', 'Picks'))
-    for value, team in reversed(sorted((v,k) for k,v in values.iteritems())):
-        ev = (value + everyone_loses) * total_chosen
-        win_percent = wp(team)
-        c = counts[team] / total_chosen
-        print '%8s%8.3f%8.3f%8.3f' % (team, ev, win_percent, c)
-    print('')
+def picks_matrix(f):
+    picks = None
+    with open(f) as input:
+        for line in input:
+            if not picks:
+                picks = [(float(x), {}) for x in line.split()]
+            else:
+                tokens = line.split()
+                team = tokens[0]
+                i = 0
+                for i, token in enumerate(tokens[1:]):
+                    picks[i][1][team] = int(token)
+    return picks
 
 # this is the main entry point for python scripts
 if __name__ == "__main__":
-    p()
+    main()
 
