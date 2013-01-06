@@ -38,6 +38,12 @@ def expected_value(teams, my_pick, picks, odds, outcomes):
                 counts[teams[x]] -= 1
     return result
 
+def in_order(my_pick):
+    for i, t in enumerate(my_pick):
+        if i != 0 and my_pick[i - 1] > my_pick[i]:
+            return False
+    return True
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--picks')
@@ -58,7 +64,7 @@ def main():
             team, odds = line.split()
             win_percentages[team] = float(odds)
     
-    teams = [x for x in win_percentages]
+    teams = sorted([x for x in win_percentages])
     print teams
 
     my_pick = [0] * args.n
@@ -68,10 +74,11 @@ def main():
 
     outs = outcomes(win_percentages)
     while True:
-        ev = expected_value(teams, my_pick, picks, win_percentages, outs)
-        heapq.heappush(heap, (ev, tuple(teams[x] for x in my_pick)))
-        if len(heap) > args.k:
-            heapq.heappop(heap)
+        if in_order(my_pick):
+            ev = expected_value(teams, my_pick, picks, win_percentages, outs)
+            heapq.heappush(heap, (ev, tuple(teams[x] for x in my_pick)))
+            if len(heap) > args.k:
+                heapq.heappop(heap)
 
         if my_pick == last_pick:
             break
